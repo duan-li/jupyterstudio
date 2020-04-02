@@ -5,6 +5,8 @@ FROM $BASE_CONTAINER
 ARG PYTHON_VERSION=default
 ARG TEST_ONLY_BUILD
 
+ADD jupyter_notebook_config.json /root/.jupyter/jupyter_notebook_config.json
+
 ENV DEBIAN_FRONTEND=noninteractive \
 	CONDA_DIR=/opt/conda \
     SHELL=/bin/bash \
@@ -61,6 +63,9 @@ RUN apt-get update \
     fonts-dejavu \
     gfortran \
     gcc \
+    # ==== PHP ====
+    php-zmq \
+    composer \
  && apt-get clean && rm -rf /var/lib/apt/lists/* \
  && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
     locale-gen \
@@ -202,6 +207,9 @@ RUN apt-get update \
     # move kernelspec out of home \
     mv $HOME/.local/share/jupyter/kernels/julia* $CONDA_DIR/share/jupyter/kernels/ && \
     chmod -R go+rx $CONDA_DIR/share/jupyter \
+#=> PHP
+ && wget -P /tmp https://litipk.github.io/Jupyter-PHP-Installer/dist/jupyter-php-installer.phar && \
+    php /root/jupyter-php-installer.phar install && \
 #=> Clean UP
  && conda update --all --quiet --yes && \
     conda clean --all -f -y && \
