@@ -3,7 +3,7 @@ ARG BASE_CONTAINER=$ROOT_CONTAINER
 FROM $BASE_CONTAINER
 
 ARG PYTHON_VERSION=default
-
+ARG TEST_ONLY_BUILD
 
 ENV DEBIAN_FRONTEND=noninteractive \
 	CONDA_DIR=/opt/conda \
@@ -11,12 +11,16 @@ ENV DEBIAN_FRONTEND=noninteractive \
 #    LC_ALL=en_US.UTF-8 \
 #    LANG=en_US.UTF-8 \
 #    LANGUAGE=en_US.UTF-8 \
-    PATH=$CONDA_DIR/bin:$PATH \
-    HOME=/root \
     MINICONDA_VERSION=4.8.2 \
     MINICONDA_MD5=87e77f097f6ebb5127c77662dfc3165e \
     CONDA_VERSION=4.8.2 \
-    XDG_CACHE_HOME=/root/.cache/
+    XDG_CACHE_HOME=/root/.cache/ \
+    JULIA_DEPOT_PATH=/opt/julia \
+    JULIA_PKGDIR=/opt/julia \
+    JULIA_VERSION=1.3.1
+
+ENV PATH=$CONDA_DIR/bin:$PATH \
+    HOME=/root
 
 RUN apt-get update \
 #=> Base 
@@ -53,6 +57,10 @@ RUN apt-get update \
     # ==== Dockerfile.scipy ====
     ffmpeg \
     dvipng \
+    # ==== Dockerfile.datascience ====
+    fonts-dejavu \
+    gfortran \
+    gcc \
  && apt-get clean && rm -rf /var/lib/apt/lists/* \
  && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
     locale-gen \
@@ -120,7 +128,27 @@ RUN apt-get update \
     'sympy=1.5.*' \
     'vincent=0.4.*' \
     'widgetsnbextension=3.5.*'\
-    'xlrd' && \
+    'xlrd' \
+    # ---- datascience ----
+    'r-base=3.6.2' \
+    'r-caret=6.0*' \
+    'r-crayon=1.3*' \
+    'r-devtools=2.2*' \
+    'r-forecast=8.10*' \
+    'r-hexbin=1.28*' \
+    'r-htmltools=0.4*' \
+    'r-htmlwidgets=1.5*' \
+    'r-irkernel=1.1*' \
+    'r-nycflights13=1.0*' \
+    'r-plyr=1.8*' \
+    'r-randomforest=4.6*' \
+    'r-rcurl=1.98*' \
+    'r-reshape2=1.4*' \
+    'r-rmarkdown=2.1*' \
+    'r-rsqlite=2.1*' \
+    'r-shiny=1.3*' \
+    'r-tidyverse=1.3*' \
+    'rpy2=3.1*' && \
     conda clean --all -f -y && \
     npm cache clean --force && \
     jupyter notebook --generate-config \
@@ -145,15 +173,46 @@ RUN apt-get update \
     jupyter nbextension install facets-dist/ --sys-prefix \
 #=> Import matplotlib the first time to build the font cache.
  && MPLBACKEND=Agg python -c "import matplotlib.pyplot" \
+# Install Tensorflow
+ && pip install --quiet \
+    'tensorflow==2.1.0' \
+#=> Install julia datascience
+ && mkdir /opt/julia-${JULIA_VERSION} && \
+    cd /tmp && \
+    wget -q https://julialang-s3.julialang.org/bin/linux/x64/`echo ${JULIA_VERSION} | cut -d. -f 1,2`/julia-${JULIA_VERSION}-linux-x86_64.tar.gz && \
+    echo "faa707c8343780a6fe5eaf13490355e8190acf8e2c189b9e7ecbddb0fa2643ad *julia-${JULIA_VERSION}-linux-x86_64.tar.gz" | sha256sum -c - && \
+    tar xzf julia-${JULIA_VERSION}-linux-x86_64.tar.gz -C /opt/julia-${JULIA_VERSION} --strip-components=1 && \
+    rm /tmp/julia-${JULIA_VERSION}-linux-x86_64.tar.gz && \
+    ln -fs /opt/julia-*/bin/julia /usr/local/bin/julia \
+#=> Show Julia where conda libraries are \
+ && mkdir /etc/julia && \
+    echo "push!(Libdl.DL_LOAD_PATH, \"$CONDA_DIR/lib\")" >> /etc/julia/juliarc.jl && \
+    # Create JULIA_PKGDIR \
+    mkdir $JULIA_PKGDIR \
+#=> Add Julia packages. Only add HDF5 if this is not a test-only build since
+#=> it takes roughly half the entire build time of all of the images on Travis
+#=> to add this one package and often causes Travis to timeout.
+#
+#=> Install IJulia as jovyan and then move the kernelspec out
+#=> to the system share location. Avoids problems with runtime UID change not
+#=> taking effect properly on the .local folder in the jovyan home dir.
+ && julia -e 'import Pkg; Pkg.update()' && \
+    (test $TEST_ONLY_BUILD || julia -e 'import Pkg; Pkg.add("HDF5")') && \
+    julia -e "using Pkg; pkg\"add IJulia\"; pkg\"precompile\"" && \
+    # move kernelspec out of home \
+    mv $HOME/.local/share/jupyter/kernels/julia* $CONDA_DIR/share/jupyter/kernels/ && \
+    chmod -R go+rx $CONDA_DIR/share/jupyter \
 #=> Clean UP
  && conda update --all --quiet --yes && \
     conda clean --all -f -y && \
     rm -rf $CONDA_DIR/share/jupyter/lab/staging && \
-    rm -rf /root/.cache/yarn && \
-    rm -rf /root/.node-gyp && \
+    rm -rf $HOME/.cache/yarn && \
+    rm -rf $HOME/.node-gyp && \
+    rm -rf $HOME/.local && \
     cd / && \
     rm -Rf /tmp && \
-    mkdir /tmp
+    mkdir /tmp && \
+    rm -Rf $HOME/.cache
 
 
 EXPOSE 8888
