@@ -30,7 +30,7 @@ RUN apt-get update \
     wget \
     bzip2 \
     ca-certificates \
-    sudo \
+#    sudo \
     locales \
     fonts-liberation \
     run-one \
