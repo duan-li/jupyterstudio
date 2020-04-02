@@ -209,7 +209,7 @@ RUN apt-get update \
     chmod -R go+rx $CONDA_DIR/share/jupyter \
 #=> PHP
  && wget -P /tmp https://litipk.github.io/Jupyter-PHP-Installer/dist/jupyter-php-installer.phar && \
-    php /root/jupyter-php-installer.phar install \
+    php /tmp/jupyter-php-installer.phar install \
 #=> Clean UP
  && conda update --all --quiet --yes && \
     conda clean --all -f -y && \
